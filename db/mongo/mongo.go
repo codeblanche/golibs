@@ -11,12 +11,15 @@ var (
 )
 
 type (
-	// ID type abstraction of mgo's bson.ObjectId
-	ID bson.ObjectId
+	// OID type alias of mgo's bson.ObjectId
+	OID bson.ObjectId
+
+	// M type alias of mgo's bson.M
+	M bson.M
 
 	// Model defines the interface for mongo.Models
 	Model interface {
-		ID() bson.ObjectId
+		ObjectID() OID
 		DBName() string
 		CName() string
 	}
@@ -51,7 +54,7 @@ func IndexKey(m Model, key ...string) error {
 }
 
 // Load a db model matching the given conditions
-func Load(m Model, query bson.M) error {
+func Load(m Model, query M) error {
 	s := session()
 	defer s.Close()
 
@@ -67,7 +70,7 @@ func Load(m Model, query bson.M) error {
 }
 
 // LoadAll db models matching the given conditions
-func LoadAll(m Model, query bson.M, into []Model) error {
+func LoadAll(m Model, query M, into []Model) error {
 	s := session()
 	defer s.Close()
 
@@ -82,11 +85,11 @@ func Save(m ...Model) error {
 	defer s.Close()
 
 	for _, model := range m {
-		id := bson.ObjectId(model.ID())
+		id := bson.ObjectId(model.ObjectID())
 		if !id.Valid() {
 			id = bson.NewObjectId()
 		}
-		_, err := c(s, model).Upsert(bson.M{"_id": id}, model)
+		_, err := c(s, model).Upsert(M{"_id": id}, model)
 		if err != nil {
 			errl = append(errl, err)
 		}
@@ -105,4 +108,9 @@ func session() *mgo.Session {
 // c returns a *mgo.Collection
 func c(s *mgo.Session, m Model) *mgo.Collection {
 	return s.DB(m.DBName()).C(m.CName())
+}
+
+// StringtoOID converts a string OID into the internal OID type
+func StringToOID(id string) OID {
+	return OID(bson.ObjectIdHex(id))
 }
