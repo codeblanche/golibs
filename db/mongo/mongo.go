@@ -1,6 +1,8 @@
 package mongo
 
 import (
+	"time"
+
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )
@@ -12,7 +14,17 @@ var (
 
 type (
 	// OID type alias of mgo's bson.ObjectId
-	OID bson.ObjectId
+	OID interface {
+		Counter() int32
+		Hex() string
+		Machine() []byte
+		MarshalJSON() ([]byte, error)
+		Pid() uint16
+		String() string
+		Time() time.Time
+		// UnmarshalJSON([]byte) error //takes a pointer receiver
+		Valid() bool
+	}
 
 	// M type alias of mgo's bson.M
 	M bson.M
@@ -85,7 +97,7 @@ func Save(m ...Model) error {
 	defer s.Close()
 
 	for _, model := range m {
-		id := bson.ObjectId(model.ObjectID())
+		id := model.ObjectID()
 		if !id.Valid() {
 			id = bson.NewObjectId()
 		}
