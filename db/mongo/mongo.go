@@ -34,6 +34,7 @@ type (
 		ObjectID() OID
 		DBName() string
 		CName() string
+		SetObjectID(OID)
 	}
 
 	// SessionError for mongo session failures
@@ -98,8 +99,9 @@ func Save(m ...Model) error {
 
 	for _, model := range m {
 		id := model.ObjectID()
-		if !id.Valid() {
+		if id == nil || !id.Valid() {
 			id = bson.NewObjectId()
+			model.SetObjectID(id)
 		}
 		_, err := c(s, model).Upsert(M{"_id": id}, model)
 		if err != nil {
@@ -122,7 +124,7 @@ func c(s *mgo.Session, m Model) *mgo.Collection {
 	return s.DB(m.DBName()).C(m.CName())
 }
 
-// StringtoOID converts a string OID into the internal OID type
+// StringToOID converts a string OID into the internal OID type
 func StringToOID(id string) OID {
 	return OID(bson.ObjectIdHex(id))
 }
