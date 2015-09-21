@@ -83,7 +83,7 @@ func Load(m Model, query M) error {
 }
 
 // LoadAll db models matching the given conditions
-func LoadAll(m Model, query M, into []Model) error {
+func LoadAll(m Model, query M, into interface{}) error {
 	s := session()
 	defer s.Close()
 
