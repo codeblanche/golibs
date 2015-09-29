@@ -1,6 +1,7 @@
 package mongo
 
 import (
+	"strings"
 	"time"
 
 	"gopkg.in/mgo.v2"
@@ -82,12 +83,37 @@ func Load(m Model, query M) error {
 	return nil
 }
 
-// LoadAll db models matching the given conditions
-func LoadAll(m Model, query M, into interface{}) error {
+// LoadAll load all documents matching the given conditions sorted by a comma separated list of attribute names
+func LoadAll(m Model, query M, sort string, into interface{}) error {
 	s := session()
 	defer s.Close()
 
-	return c(s, m).Find(query).All(into)
+	q := c(s, m).Find(query)
+
+	if len(sort) > 0 {
+		so := strings.Split(sort, ",")
+		q.Sort(so...)
+	}
+
+	return q.All(into)
+}
+
+// LoadPage loads a page of documents into the given slice sorted by a comma separated list of attribute names
+func LoadPage(m Model, query M, sort string, page, size int, into interface{}) error {
+	s := session()
+	defer s.Close()
+
+	q := c(s, m).Find(query)
+
+	if len(sort) > 0 {
+		so := strings.Split(sort, ",")
+		q.Sort(so...)
+	}
+
+	q.Skip(size * (page - 1))
+	q.Limit(size)
+
+	return q.All(into)
 }
 
 // Save the given db models
