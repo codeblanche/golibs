@@ -1,8 +1,12 @@
 package mongo
 
 import (
+	"errors"
+	"reflect"
 	"strings"
 	"time"
+
+	"github.com/codeblanche/golibs/logr"
 
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
@@ -13,37 +17,35 @@ var (
 	Session *mgo.Session
 )
 
-type (
-	// OID type alias of mgo's bson.ObjectId
-	OID interface {
-		Counter() int32
-		Hex() string
-		Machine() []byte
-		MarshalJSON() ([]byte, error)
-		Pid() uint16
-		String() string
-		Time() time.Time
-		// UnmarshalJSON([]byte) error //takes a pointer receiver
-		Valid() bool
-	}
+// OID type alias of mgo's bson.ObjectId
+type OID interface {
+	Counter() int32
+	Hex() string
+	Machine() []byte
+	MarshalJSON() ([]byte, error)
+	Pid() uint16
+	String() string
+	Time() time.Time
+	// UnmarshalJSON([]byte) error //takes a pointer receiver
+	Valid() bool
+}
 
-	// M type alias of mgo's bson.M
-	M bson.M
+// M type alias of mgo's bson.M
+type M bson.M
 
-	// Model defines the interface for mongo.Models
-	Model interface {
-		ObjectID() OID
-		DBName() string
-		CName() string
-		SetObjectID(OID)
-	}
+// Model defines the interface for models to be stored in mongo
+type Model interface {
+	ObjectID() OID
+	DBName() string
+	CName() string
+	SetObjectID(interface{})
+}
 
-	// SessionError for mongo session failures
-	SessionError struct{}
+// SessionError for mongo session failures
+type SessionError struct{}
 
-	// ErrorList collection of multiple errors
-	ErrorList []error
-)
+// ErrorList collection of multiple errors
+type ErrorList []error
 
 // Error implements error interface
 func (e SessionError) Error() string {
@@ -59,32 +61,101 @@ func (e ErrorList) Error() string {
 	return err
 }
 
-// IndexKey ensures an index on the given keys
-func IndexKey(m Model, key ...string) error {
+// Index ensures an index on the given keys
+func Index(m Model, key ...string) error {
 	s := session()
 	defer s.Close()
 
 	return c(s, m).EnsureIndexKey(key...)
 }
 
-// Load a db model matching the given conditions
-func Load(m Model, query M) error {
+// Load a db model using it's ObjectID
+func Load(m Model) error {
+	return One(M{"_id": m.ObjectID()}, m)
+}
+
+// LoadList loads a slice of models using their ObjectIDs
+func LoadList(l interface{}) error {
+	list, ok := l.([]Model)
+	if !ok {
+		return errors.New("Unable to use %T as []mongo.Model")
+	}
+	var ids []OID
+	for _, e := range list {
+		e := e.(Model)
+		ids = append(ids, e.ObjectID())
+	}
+	return Find(M{"$in": ids}, "", l)
+}
+
+// Remove removes a Document by Object Id
+func Remove(m ...Model) error {
+	var errl ErrorList
+
 	s := session()
 	defer s.Close()
 
-	q := c(s, m).Find(query)
-	n, err := q.Count()
+	// TODO optimize this into a single query per collection
+	for _, model := range m {
+		id := model.ObjectID()
+		if id == nil || !id.Valid() {
+			continue
+		}
+		err := c(s, model).Remove(M{"_id": id})
+		if err != nil {
+			errl = append(errl, err)
+		}
+	}
+	if len(errl) > 0 {
+		return errl
+	}
+	return nil
+
+}
+
+// Update Load a db model matching the given conditions
+func Update(m Model, query M) error {
+	m, err := resolveModel(m)
 	if err != nil {
 		return err
 	}
-	if n > 0 {
-		q.One(m)
+
+	s := session()
+	defer s.Close()
+
+	err = c(s, m).Update(M{"_id": m.ObjectID()}, query)
+	if err != nil {
+		return err
 	}
 	return nil
 }
 
-// LoadAll load all documents matching the given conditions sorted by a comma separated list of attribute names
-func LoadAll(m Model, query M, sort string, into interface{}) error {
+// Count the number of document matching the given query
+// TODO
+func Count(m Model, query M) int {
+	return 0
+}
+
+// One finds a single document
+func One(query M, into interface{}) error {
+	m, err := resolveModel(into)
+	if err != nil {
+		return err
+	}
+
+	s := session()
+	defer s.Close()
+
+	return c(s, m).Find(query).One(into)
+}
+
+// Find documents
+func Find(query M, sort string, into interface{}) error {
+	m, err := resolveModel(into)
+	if err != nil {
+		return err
+	}
+
 	s := session()
 	defer s.Close()
 
@@ -98,8 +169,13 @@ func LoadAll(m Model, query M, sort string, into interface{}) error {
 	return q.All(into)
 }
 
-// LoadPage loads a page of documents into the given slice sorted by a comma separated list of attribute names
-func LoadPage(m Model, query M, sort string, page, size int, into interface{}) error {
+// Page is much live Find with the addition of paging
+func Page(query M, sort string, page, size int, into interface{}) error {
+	m, err := resolveModel(into)
+	if err != nil {
+		return err
+	}
+
 	s := session()
 	defer s.Close()
 
@@ -114,6 +190,28 @@ func LoadPage(m Model, query M, sort string, page, size int, into interface{}) e
 	q.Limit(size)
 
 	return q.All(into)
+}
+
+// resolveModel resolves the Model implementing object from a slice or pointer
+func resolveModel(v interface{}) (Model, error) {
+	t := reflect.TypeOf(v)
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	if t.Kind() == reflect.Slice {
+		m, ok := reflect.New(t.Elem()).Interface().(Model)
+		if ok {
+			return m, nil
+		}
+
+	}
+	if t.Kind() == reflect.Struct {
+		m, ok := v.(Model)
+		if ok {
+			return m, nil
+		}
+	}
+	return nil, errors.New("Parameter 'into' must be a slice of mongo.Model elements or a mongo.Model")
 }
 
 // Save the given db models
@@ -150,7 +248,22 @@ func c(s *mgo.Session, m Model) *mgo.Collection {
 	return s.DB(m.DBName()).C(m.CName())
 }
 
-// StringToOID converts a string OID into the internal OID type
-func StringToOID(id string) OID {
-	return OID(bson.ObjectIdHex(id))
+// ToOID converts any given value into the internal OID type
+func ToOID(id interface{}) OID {
+	switch t := id.(type) {
+	case string:
+		id := id.(string)
+		if bson.IsObjectIdHex(id) {
+			return OID(bson.ObjectIdHex(id))
+		}
+	case bson.ObjectId:
+		id := id.(bson.ObjectId)
+		return OID(id)
+	case OID:
+		id := id.(OID)
+		return id
+	default:
+		logr.Debugf("Unable to convert type: %T to mongo.OID", t)
+	}
+	return nil
 }
