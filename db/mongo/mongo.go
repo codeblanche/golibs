@@ -130,10 +130,16 @@ func Update(m Model, query M) error {
 	return nil
 }
 
-// Count the number of document matching the given query
-// TODO
-func Count(m Model, query M) int {
-	return 0
+// Count counts numbers of row based on Query
+func Count(query M, into interface{}) (int, error) {
+	m, err := resolveModel(into)
+	if err != nil {
+		return 0, err
+	}
+	s := session()
+	defer s.Close()
+	e, _ := c(s, m).Find(query).Count()
+	return e, err
 }
 
 // One finds a single document
