@@ -1,6 +1,13 @@
 package password
 
-import "golang.org/x/crypto/bcrypt"
+import (
+	"crypto/rand"
+	"io"
+
+	"github.com/codeblanche/golibs/logr"
+
+	"golang.org/x/crypto/bcrypt"
+)
 
 var (
 	// Cost is the default cost setting for hashing the password.
@@ -31,4 +38,29 @@ func (p P) Compare(pw string) error {
 // Match tests a string pw against the Password and returns a bool result
 func (p P) Match(pw string) bool {
 	return p.Compare(pw) == nil
+}
+
+// Generate a new password of given length
+func Generate(length int) string {
+	chars := []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()-_=+,.?/:;{}[]`~")
+	n := make([]byte, length)
+	r := make([]byte, length+(length/4)) // storage for random bytes.
+	clen := byte(len(chars))
+	maxrb := byte(256 - (256 % len(chars)))
+	i := 0
+	for {
+		if _, err := io.ReadFull(rand.Reader, r); err != nil {
+			logr.Errorf("Unable to read from rand.Reader with error: %s", err.Error())
+		}
+		for _, c := range r {
+			if c >= maxrb {
+				continue
+			}
+			n[i] = chars[c%clen]
+			i++
+			if i == length {
+				return string(n)
+			}
+		}
+	}
 }
