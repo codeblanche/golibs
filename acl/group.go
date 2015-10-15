@@ -20,6 +20,10 @@ func MakeGroups(n ...string) Groups {
 	return g
 }
 
+func (g Group) String() string {
+	return string(g)
+}
+
 // Contains checks if groups list contains a given group
 func (g Groups) Contains(group Group) bool {
 	for _, v := range g {

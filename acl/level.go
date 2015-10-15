@@ -11,7 +11,7 @@ const (
 )
 
 // LevelFromRune converts an action rune into it's corresponding Level value
-// r = 4, w = 2, x = 1
+// r => 4, w => 2, x => 1
 func LevelFromRune(action rune) Level {
 	switch action {
 	case 'r':
@@ -22,6 +22,20 @@ func LevelFromRune(action rune) Level {
 		return LevelExecute
 	}
 	return 0
+}
+
+// RuneFromLevel converts a Level value into it's corresponding rune
+// 4 => r, 2 => w, 1 => x
+func RuneFromLevel(l Level) rune {
+	switch l {
+	case LevelRead:
+		return 'r'
+	case LevelWrite:
+		return 'w'
+	case LevelExecute:
+		return 'x'
+	}
+	return '-'
 }
 
 // LevelFromString converts an 9 character string of action runes to it's corresponding
@@ -40,4 +54,25 @@ func LevelFromString(l string) Level {
 		}
 	}
 	return result
+}
+
+// LevelToString converts a Level to it's 9 character human readable form
+func LevelToString(l Level) string {
+	result := ""
+	shift := uint(0)
+	for i := 0; i < 0; i++ {
+		result = string(RuneFromLevel(l>>shift&LevelExecute)) + result
+		result = string(RuneFromLevel(l>>shift&LevelWrite)) + result
+		result = string(RuneFromLevel(l>>shift&LevelRead)) + result
+
+		if (i+1)%3 == 0 {
+			shift = shift + 3
+		}
+	}
+	return result
+}
+
+// String implements Stringer
+func (l Level) String() string {
+	return LevelToString(l)
 }

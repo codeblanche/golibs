@@ -15,6 +15,6 @@ func NewUser(id string, groups []string) *User {
 }
 
 // Can tests a user agains a action and grant
-func (u *User) Can(action rune, g Grant) bool {
-	return g.canUser(*u, LevelFromRune(action))
+func (u User) Can(action rune, g Grant) bool {
+	return u.groups.Contains(adminGroup) || g.canUser(u, LevelFromRune(action))
 }
