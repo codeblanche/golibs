@@ -1,5 +1,7 @@
 package acl
 
+import "strings"
+
 // Level constant type
 type Level int
 
@@ -8,17 +10,18 @@ const (
 	LevelRead    Level = 04
 	LevelWrite   Level = 02
 	LevelExecute Level = 01
+	LevelNone    Level = 00
 )
 
 // LevelFromRune converts an action rune into it's corresponding Level value
 // r => 4, w => 2, x => 1
 func LevelFromRune(action rune) Level {
 	switch action {
-	case 'r':
+	case Read:
 		return LevelRead
-	case 'w':
+	case Write:
 		return LevelWrite
-	case 'x':
+	case Execute:
 		return LevelExecute
 	}
 	return 0
@@ -29,11 +32,11 @@ func LevelFromRune(action rune) Level {
 func RuneFromLevel(l Level) rune {
 	switch l {
 	case LevelRead:
-		return 'r'
+		return Read
 	case LevelWrite:
-		return 'w'
+		return Write
 	case LevelExecute:
-		return 'x'
+		return Execute
 	}
 	return '-'
 }
@@ -75,4 +78,42 @@ func LevelToString(l Level) string {
 // String implements Stringer
 func (l Level) String() string {
 	return LevelToString(l)
+}
+
+// LevelFromExpression converts a permission express in the form of ugo+w or u+rw,g+r to it's corresponding
+// level value. This function has the accidental genius ability to process a complex expression in the form
+// of uwxgor which translates to ugo+r,u+wx though admitedly more complicated to read and understand.
+func LevelFromExpression(e string) Level {
+	u, g, o := LevelNone, LevelNone, LevelNone
+	expressions := strings.Split(e, ",")
+	for _, expression := range expressions {
+		// Reverse the expression so level bytes (rwx) are process first followed by assignment bytes (ugo)
+		bytes := reverse([]byte(expression))
+		l := LevelNone
+		for _, b := range bytes {
+			switch b {
+			case Read:
+				l = l | LevelRead
+			case Write:
+				l = l | LevelWrite
+			case Execute:
+				l = l | LevelExecute
+			case 'u':
+				u = u | l
+			case 'g':
+				g = g | l
+			case 'o':
+				o = o | l
+			}
+		}
+	}
+	return (u << 6) | (g << 3) | o
+}
+
+// Reverse a byte slice
+func reverse(b []byte) []byte {
+	for i, j := 0, len(b)-1; i < j; i, j = i+1, j-1 {
+		b[i], b[j] = b[j], b[i]
+	}
+	return b
 }

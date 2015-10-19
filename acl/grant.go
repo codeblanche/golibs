@@ -8,11 +8,11 @@ type Grant interface {
 }
 
 // MakeGrant creates a new grant model
-func MakeGrant(uid, group, level string) G {
+func MakeGrant(uid, group string, level Level) G {
 	return G{
 		UserID: uid,
 		Group:  MakeGroup(group),
-		Level:  LevelFromString(level),
+		Level:  level,
 	}
 }
 
