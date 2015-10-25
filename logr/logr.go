@@ -52,6 +52,11 @@ func init() {
 	go golog()
 }
 
+// Wait for log messages to be processed
+func Wait() {
+	time.Sleep(time.Nanosecond * 1000)
+}
+
 // Output logs matching the given type filter to the given writers.
 func Output(t Type, to ...io.Writer) {
 	for _, w := range to {

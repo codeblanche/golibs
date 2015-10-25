@@ -1,6 +1,10 @@
 package acl
 
-import "strings"
+import (
+	"strings"
+
+	"gopkg.in/mgo.v2/bson"
+)
 
 // Level constant type
 type Level int
@@ -62,15 +66,12 @@ func LevelFromString(l string) Level {
 // LevelToString converts a Level to it's 9 character human readable form
 func LevelToString(l Level) string {
 	result := ""
-	shift := uint(0)
-	for i := 0; i < 0; i++ {
-		result = string(RuneFromLevel(l>>shift&LevelExecute)) + result
-		result = string(RuneFromLevel(l>>shift&LevelWrite)) + result
-		result = string(RuneFromLevel(l>>shift&LevelRead)) + result
-
-		if (i+1)%3 == 0 {
-			shift = shift + 3
-		}
+	shift := uint(6)
+	for i := 0; i < 3; i++ {
+		result = result + string(RuneFromLevel(l>>shift&LevelRead))
+		result = result + string(RuneFromLevel(l>>shift&LevelWrite))
+		result = result + string(RuneFromLevel(l>>shift&LevelExecute))
+		shift = shift - 3
 	}
 	return result
 }
@@ -116,4 +117,59 @@ func reverse(b []byte) []byte {
 		b[i], b[j] = b[j], b[i]
 	}
 	return b
+}
+
+// Need to create a new type for SetBSON to prevent recursion
+type bsonLevel struct {
+	UserCanRead     bool `bson:"user_can_read,omitempty"`
+	UserCanWrite    bool `bson:"user_can_write,omitempty"`
+	UserCanExecute  bool `bson:"user_can_execute,omitempty"`
+	GroupCanRead    bool `bson:"group_can_read,omitempty"`
+	GroupCanWrite   bool `bson:"group_can_write,omitempty"`
+	GroupCanExecute bool `bson:"group_can_execute,omitempty"`
+	OtherCanRead    bool `bson:"other_can_read,omitempty"`
+	OtherCanWrite   bool `bson:"other_can_write,omitempty"`
+	OtherCanExecute bool `bson:"other_can_execute,omitempty"`
+}
+
+// GetBSON implements bson.Getter
+func (l Level) GetBSON() (interface{}, error) {
+	t := bsonLevel{}
+	t.UserCanRead = (l&0400 > 0)
+	t.UserCanWrite = (l&0200 > 0)
+	t.UserCanExecute = (l&0100 > 0)
+	t.GroupCanRead = (l&0040 > 0)
+	t.GroupCanWrite = (l&0020 > 0)
+	t.GroupCanExecute = (l&0010 > 0)
+	t.OtherCanRead = (l&0004 > 0)
+	t.OtherCanWrite = (l&0002 > 0)
+	t.OtherCanExecute = (l&0001 > 0)
+	return t, nil
+}
+
+// SetBSON implements bson.Setter
+func (l *Level) SetBSON(raw bson.Raw) (err error) {
+	var t bsonLevel
+	err = raw.Unmarshal(&t)
+	if err != nil {
+		return err
+	}
+	m := map[Level]bool{
+		Level(0400): t.UserCanRead,
+		Level(0200): t.UserCanWrite,
+		Level(0100): t.UserCanExecute,
+		Level(0040): t.GroupCanWrite,
+		Level(0020): t.GroupCanRead,
+		Level(0010): t.GroupCanExecute,
+		Level(0004): t.OtherCanRead,
+		Level(0002): t.OtherCanWrite,
+		Level(0001): t.OtherCanExecute,
+	}
+	for p, b := range m {
+		if !b {
+			continue
+		}
+		*l = *l | p
+	}
+	return
 }
