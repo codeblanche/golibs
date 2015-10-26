@@ -26,10 +26,10 @@ type G struct {
 // canUser implements Grant interface
 func (g G) canUser(u User, l Level) bool {
 	ugo := Level(0)
-	if u.id == g.UserID {
+	if g.UserID != "" && u.id == g.UserID {
 		ugo = ugo | l<<6
 	}
-	if u.groups.Contains(g.Group) {
+	if g.Group != "" && u.groups.Contains(g.Group) {
 		ugo = ugo | l<<3
 	}
 	ugo = ugo | l
